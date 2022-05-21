@@ -2,6 +2,7 @@ pub mod schema;
 pub mod models;
 
 #[macro_use]
+
 extern crate diesel;
 extern crate dotenv;
 
@@ -9,6 +10,7 @@ use diesel::prelude::*;
 use diesel::pg::PgConnection;
 use dotenv::dotenv;
 use std::env;
+use schema::Users::dsl::*;
 
 pub fn establish_connection() -> PgConnection {
     dotenv().ok();
@@ -20,12 +22,33 @@ pub fn establish_connection() -> PgConnection {
 }
 
 
+pub fn check_email_exists<'a>(conn: &PgConnection, email: &'a str) -> bool {
+    
+    let results = Users.filter(Email.eq(email))
+    .limit(1)
+    .load::<User>(conn)
+        .expect("Error loading user");
+        
+        if results.is_empty() {
+            println!("User already exists");
+            return true;    
+    } 
+
+return false;
+
+
+    }
+
+
+
+
 
 use self::models::{User, NewUser};
 
 pub fn new_user<'a>(conn: &PgConnection, email: &'a str, password: &'a str) -> User {
    
     use schema::Users;
+   
 
     let new_user = NewUser {
         Email: email,

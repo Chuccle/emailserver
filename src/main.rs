@@ -1,30 +1,3 @@
-// extern crate server;
-// extern crate diesel;
-
-// use self::server::*;
-// use self::models::*;
-// use self::diesel::prelude::*;
-
-// fn main() {
-//     use server::schema::Users::dsl::*;
-
-//     let connection = establish_connection();
-//     let results = Users.filter(AccountID.eq(1))
-//         .limit(5)
-//         .load::<User>(&connection)
-//         .expect("Error loading posts");
-
-//     println!("Displaying {} users", results.len());
-   
-//     for user in results {
-//         println!("{}", user.Email);
-//         println!("----------\n");
-//         println!("{}", user.Password);
-//     }
-// }
-
-// script to read data 
-
 
 
 extern crate server;
@@ -35,17 +8,21 @@ extern crate rand;
 use actix_web::{get, App, HttpResponse, HttpServer, Responder};
 use self::server::*;
 use self::models::*;
-use std::io::{stdin, Read};
 use argon2::{Config};
 use self::diesel::prelude::*;
 use rand::Rng;
 use server::schema::Users::dsl::*;
 
+
+
+
+
 #[get("/login")]
 async fn login() -> impl Responder {
 
          let connection = establish_connection();
-    let results = Users.filter(Email.eq("epic"))
+    
+         let results = Users.filter(Email.eq("epic"))
         .limit(10)
         .load::<User>(&connection)
         .expect("Error loading user");
@@ -60,32 +37,34 @@ async fn login() -> impl Responder {
   
     println!("{}",matches);
 
-    
-
-    
     HttpResponse::Ok().body("Hello world!")
-
-
-
 
 }
     
     
 
 
-
-
-
-
-
 #[get("/register")]
 async fn register() -> impl Responder {
-   //create random salt
+ 
+ 
+ //TODO: 
+    // Run a select query to see if the desired email already exists
+    // If it does, return an error
+ // Done
+
+ // Now we need to retrieve the request data from the client
+ 
+ 
+
+
+
+    //create random salt
     let salt = rand::thread_rng().gen::<[u8; 12]>();
     //println!("{:?}", salt);
     let config = Config::default();
     
-    let email = "epic";
+    let email = "epic121";
     
     let password = b"password";
     let hash = argon2::hash_encoded(password, &salt, &config).unwrap();
@@ -96,6 +75,11 @@ async fn register() -> impl Responder {
 
     let connection = establish_connection();
 
+    if !(check_email_exists(&connection, email)) {
+
+       return HttpResponse::Ok().body("Email already exists");
+
+    } 
 
 
     new_user(&connection, email, &hash);
