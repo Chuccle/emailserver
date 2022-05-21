@@ -1,51 +1,75 @@
-
-
 extern crate server;
 extern crate diesel;
 extern crate argon2;
 extern crate rand;
+extern crate serde;
 
-use actix_web::{get, App, HttpResponse, HttpServer, Responder};
+
+use actix_web::post;
+use actix_web::{App, HttpResponse, HttpServer, Responder, web};
 use self::server::*;
 use self::models::*;
-use argon2::{Config};
+use argon2::Config;
 use self::diesel::prelude::*;
 use rand::Rng;
 use server::schema::Users::dsl::*;
+use serde::Deserialize;
 
 
 
 
+#[derive(Deserialize)]
+struct Info {
+    p_email: String,
+    p_password: String,
+    p_microbit_id: String
+}
 
-#[get("/login")]
-async fn login() -> impl Responder {
 
+
+
+#[post("/login")]
+async fn login(req: web::Json<Info>) -> impl Responder {
+
+
+    println!("{}", req.p_email);
+    println!("{}", req.p_password);
          let connection = establish_connection();
-    
-         let results = Users.filter(Email.eq("epic"))
-        .limit(10)
+
+         let results = Users.filter(email.eq(&req.p_email))
+        .limit(1)
         .load::<User>(&connection)
         .expect("Error loading user");
 
-    println!("Displaying {} user", results[0].Email);
-   
-    let password = b"password";
-    
 
+        if results.is_empty() {
+            println!("User does not exist");
+            return HttpResponse::Ok().body("User does not exist");
+        }
+
+    println!("Displaying {} user", results[0].email);
+   
+
+    
    // println!("{}", hash);
-    let matches = argon2::verify_encoded(&results[0].Password, password).unwrap();
+    let matches = argon2::verify_encoded(&results[0].password, req.p_password.as_bytes()).unwrap();
   
     println!("{}",matches);
 
-    HttpResponse::Ok().body("Hello world!")
+    if matches {
+        HttpResponse::Ok().json(results[0].id)
+    } 
+    else {
+        HttpResponse::Ok().json("Wrong password")
+    }
 
 }
     
     
 
 
-#[get("/register")]
-async fn register() -> impl Responder {
+#[post("/register")]
+async fn register(req: web::Json<Info>) -> impl Responder {
  
  
  //TODO: 
@@ -54,9 +78,22 @@ async fn register() -> impl Responder {
  // Done
 
  // Now we need to retrieve the request data from the client
+ // Done
  
+ let connection = establish_connection();
+
+ if !(check_microbit_exists(&connection, &req.p_microbit_id)) {
+
+    return HttpResponse::Ok().body("Microbit invalid");
+ }
+
  
 
+ if !(check_email_exists(&connection, &req.p_email)) {
+
+    return HttpResponse::Ok().body("Email already exists");
+
+ } 
 
 
     //create random salt
@@ -64,32 +101,27 @@ async fn register() -> impl Responder {
     //println!("{:?}", salt);
     let config = Config::default();
     
-    let email = "epic121";
-    
-    let password = b"password";
-    let hash = argon2::hash_encoded(password, &salt, &config).unwrap();
+
+    let hash = argon2::hash_encoded(req.p_password.as_bytes(), &salt, &config).unwrap();
    // println!("{}", hash);
-    let matches = argon2::verify_encoded(&hash, password).unwrap();
+    let matches = argon2::verify_encoded(&hash, req.p_password.as_bytes()).unwrap();
   
     println!("{}",matches);
 
-    let connection = establish_connection();
 
-    if !(check_email_exists(&connection, email)) {
+   let newUser = new_user(&connection, &req.p_email, &hash);
+   
 
-       return HttpResponse::Ok().body("Email already exists");
+    new_microbit_owner(&connection, &newUser.id, &req.p_microbit_id);
+    println!("\nSaved user {}", newUser.id);
 
-    } 
 
-
-    new_user(&connection, email, &hash);
-    println!("\nSaved draft {}", email);
     
     HttpResponse::Ok().body("Hello world!")
 
 }
 
-const EOF: &'static str = "ctrl + z";
+
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -102,6 +134,7 @@ async fn main() -> std::io::Result<()> {
     .run()
     .await
 }
+
 
 
 

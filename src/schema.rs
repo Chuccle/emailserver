@@ -1,21 +1,26 @@
 table! {
-    Microbits (MicrobitID) {
-        MicrobitID -> Int4,
-        F_AccountID -> Nullable<Int4>,
+    Microbits (id) {
+        id -> Text,
+        user_id -> Nullable<Int4>,
+        active_begin_hours -> Int4,
+        active_begin_minutes -> Int4,
+        active_end_hours -> Int4,
+        active_end_minutes -> Int4,
     }
 }
 
 table! {
-    Users (AccountID) {
-        AccountID -> Int4,
-        Email -> Text,
-        Password -> Text,
+    Users (id) {
+        id -> Int4,
+        email -> Text,
+        password -> Text,
     }
 }
 
-joinable!(Microbits -> Users (F_AccountID));
+joinable!(Microbits -> Users (user_id));
 
 allow_tables_to_appear_in_same_query!(
     Microbits,
     Users,
 );
+

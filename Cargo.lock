@@ -1197,6 +1197,7 @@ dependencies = [
  "dotenv",
  "rand",
  "rust-argon2",
+ "serde",
 ]
 
 [[package]]
