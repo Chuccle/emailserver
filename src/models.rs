@@ -10,7 +10,7 @@ pub struct User {
 }
 
 #[derive(Identifiable, Queryable, Associations, AsChangeset)]
-#[belongs_to(User)]
+#[belongs_to(parent = "User")]
 #[table_name = "Microbits"]
 pub struct Microbit {
     pub id: String,
