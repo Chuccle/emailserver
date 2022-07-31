@@ -1,39 +1,23 @@
 pub mod schema;
 pub mod models;
 
-
 #[macro_use]
 extern crate diesel;
 extern crate dotenv;
 
-use diesel::{pg::PgConnection, prelude::*};
-use dotenv::dotenv;
-use std::env;
+use diesel::prelude::*;
 use schema::{Users::email, Microbits::id as m_id, Users::id as u_id};
-use crate::schema::Microbits::dsl::Microbits;
-use schema::Microbits::user_id;
-use crate::schema::Users::dsl::Users;
+use self::models::*;
+use crate::schema::Microbits::dsl::*;
+use crate::schema::Users::dsl::*;
 
-use self::models::Microbit;
-use self::models::{User, NewUser};
+pub fn establish_connection() -> diesel::PgConnection {
+    
+    dotenv::dotenv().ok();
 
-
-
-
-
-
-
-
-
-
-
-
-pub fn establish_connection() -> PgConnection {
-    dotenv().ok();
-
-    let database_url = env::var("DATABASE_URL")
+    let database_url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set");
-    PgConnection::establish(&database_url)
+    diesel::PgConnection::establish(&database_url)
         .expect(&format!("Error connecting to {}", database_url))
 }
 
@@ -41,9 +25,7 @@ pub fn establish_connection() -> PgConnection {
 
 
 
-pub fn get_email_address<'a>(conn: &PgConnection, f_microbitid:&'a str ) ->  String {
-    
-
+pub fn get_email_address<'a>(conn: &diesel::PgConnection, f_microbitid:&'a str ) ->  String {
     
         let query1_results = Microbits.filter(m_id.eq(f_microbitid))
         .limit(1)
@@ -72,7 +54,7 @@ pub fn get_email_address<'a>(conn: &PgConnection, f_microbitid:&'a str ) ->  Str
 }
 
 
-pub fn get_active_time<'a>(conn: &PgConnection, f_microbitid:&'a str ) ->  String {
+pub fn get_active_time<'a>(conn: &diesel::PgConnection, f_microbitid:&'a str ) ->  String {
     
 
     
@@ -91,7 +73,7 @@ pub fn get_active_time<'a>(conn: &PgConnection, f_microbitid:&'a str ) ->  Strin
 
 }
 
-pub fn check_email_exists<'a>(conn: &PgConnection, f_email: &'a str) -> bool {
+pub fn check_email_exists<'a>(conn: &diesel::PgConnection, f_email: &'a str) -> bool {
     
     let results = Users.filter(email.eq(f_email))
     .limit(1)
@@ -106,7 +88,7 @@ return false;
 
     }
 
-pub fn new_user<'a>(conn: &PgConnection, f_email: &'a str, f_password: &'a str) -> User {
+pub fn new_user<'a>(conn: &diesel::PgConnection, f_email: &'a str, f_password: &'a str) -> User {
    
     use schema::Users;
    
@@ -127,7 +109,7 @@ pub fn new_user<'a>(conn: &PgConnection, f_email: &'a str, f_password: &'a str) 
 
 
 
-pub fn check_microbit_exists<'a>(conn: &PgConnection, f_microbit_id: &'a str) -> &'a str {
+pub fn check_microbit_exists<'a>(conn: &diesel::PgConnection, f_microbit_id: &'a str) -> &'a str {
     
     let results = Microbits.filter(m_id.eq(f_microbit_id))
     .limit(1)
@@ -149,11 +131,7 @@ pub fn check_microbit_exists<'a>(conn: &PgConnection, f_microbit_id: &'a str) ->
 
 
 
-
-
-
-
-pub fn new_microbit_owner<'a>(conn: &PgConnection, f_id:&'a i32,  f_microbitid:&'a str ) -> QueryResult<usize> {
+pub fn new_microbit_owner<'a>(conn: &diesel::PgConnection, f_id:&'a i32,  f_microbitid:&'a str ) -> diesel::QueryResult<usize> {
  
     use schema::Microbits;
     

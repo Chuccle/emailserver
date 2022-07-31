@@ -1,3 +1,7 @@
+use self::server::*;
+use server::schema::Users::dsl::*;
+use self::diesel::prelude::*;
+
 extern crate server;
 extern crate diesel;
 extern crate argon2;
@@ -5,80 +9,61 @@ extern crate rand;
 extern crate serde;
 extern crate dotenv;
 
-use actix_web::post;
-use actix_web::{App, HttpResponse, HttpServer, Responder, web};
-use self::server::*;
-use self::models::*;
-use argon2::Config;
-use self::diesel::prelude::*;
-use rand::Rng;
-use server::schema::Users::dsl::*;
-use serde::{Deserialize, Serialize};
-use lettre::{Message, SmtpTransport, Transport};
-use lettre::transport::smtp::authentication::Credentials;
-use dotenv::dotenv;
-use std::env;
 
-#[derive(Serialize)]
+#[derive(serde::Serialize)]
 struct TimesResponse {
     begin_hours: String,
     begin_minutes: String,
     end_hours: String,
     end_minutes: String,}
 
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
 struct RegisterPayload {
     p_email: String,
     p_password: String,
     p_microbit_id: String
 }
 
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
 struct LoginPayload {
     p_email: String,
     p_password: String,
 }
 
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
 struct EmailPayload {
     p_microbit_id: String
 }
 
 
 
-#[post("/login")]
-async fn login(req: web::Json<LoginPayload>) -> impl Responder {
+#[actix_web::post("/login")]
+async fn login(req: actix_web::web::Json<LoginPayload>) -> impl actix_web::Responder {
 
+        let connection = server::establish_connection();
 
-    println!("{}", req.p_email);
-    println!("{}", req.p_password);
-         let connection = establish_connection();
-
-         let results = Users.filter(email.eq(&req.p_email))
+        let results = Users.filter(email.eq(&req.p_email))
         .limit(1)
-        .load::<User>(&connection)
+        .load::<server::models::User>(&connection)
         .expect("Error loading user");
-
 
         if results.is_empty() {
             println!("User does not exist");
-            return HttpResponse::Ok().body("User does not exist");
+            return actix_web::HttpResponse::Ok().body("User does not exist");
         }
 
     println!("Displaying {} user", results[0].email);
    
-
-    
-   // println!("{}", hash);
+    // println!("{}", hash);
     let matches = argon2::verify_encoded(&results[0].password, req.p_password.as_bytes()).unwrap();
   
     println!("{}",matches);
 
     if matches {
-        HttpResponse::Ok().json(results[0].id)
+        actix_web::HttpResponse::Ok().json(results[0].id)
     } 
     else {
-        HttpResponse::Ok().json("Wrong password")
+        actix_web::HttpResponse::Ok().json("Wrong password")
     }
 
 }
@@ -86,30 +71,27 @@ async fn login(req: web::Json<LoginPayload>) -> impl Responder {
     
 
 
-#[post("/register")]
-async fn register(req: web::Json<RegisterPayload>) -> impl Responder {
- 
- 
+#[actix_web::post("/register")]
+async fn register(req: actix_web::web::Json<RegisterPayload>) -> impl actix_web::Responder {
  
  let connection = establish_connection();
 
  if check_microbit_exists(&connection, &req.p_microbit_id) != "Microbit is not assigned" {
     
-    return HttpResponse::Ok().body("Microbit invalid");
+    return actix_web::HttpResponse::Ok().body("Microbit invalid");
  }
 
  
+ if !(server::check_email_exists(&connection, &req.p_email)) {
 
- if !(check_email_exists(&connection, &req.p_email)) {
-
-    return HttpResponse::Ok().body("Email already exists");
+    return actix_web::HttpResponse::Ok().body("Email already exists");
 
  } 
 
     //create random salt
-    let salt = rand::thread_rng().gen::<[u8; 12]>();
+    let salt = rand::Rng::gen:: <[u8;12]>(&mut rand::thread_rng());
     //println!("{:?}", salt);
-    let config = Config::default();
+    let config = argon2::Config::default();
     
 
     let hash = argon2::hash_encoded(req.p_password.as_bytes(), &salt, &config).unwrap();
@@ -119,80 +101,68 @@ async fn register(req: web::Json<RegisterPayload>) -> impl Responder {
     println!("{}",matches);
 
 
-   let newUser = new_user(&connection, &req.p_email, &hash);
+   let new_user = new_user(&connection, &req.p_email, &hash);
    
 
-    new_microbit_owner(&connection, &newUser.id, &req.p_microbit_id);
+    new_microbit_owner(&connection, &new_user.id, &req.p_microbit_id).unwrap();
     
-    println!("\nSaved user {}", newUser.id);
+    println!("\nSaved user {}", new_user.id);
 
-    HttpResponse::Ok().body("Hello world!")
+    actix_web::HttpResponse::Ok().body("Hello world!")
 
 }
 
 
-#[post("/email")]
-async fn post_email(req: web::Json<EmailPayload>) -> impl Responder {
+#[actix_web::post("/email")]
+async fn post_email(req: actix_web::web::Json<EmailPayload>) -> impl actix_web::Responder {
    
     let connection = establish_connection();
 
     let email_extraction = get_email_address(&connection, &req.p_microbit_id);
 
         if email_extraction == "Microbit does not exist" || email_extraction == "Microbit is not assigned" {
-            
-            return HttpResponse::Ok().body(email_extraction);
-        
+            return actix_web::HttpResponse::Ok().body(email_extraction);
         }
 
-        
-     
-        let google_username = env::var("GOOGLE_USERNAME")
+        let google_username = std::env::var("GOOGLE_USERNAME")
         .expect("Username must be set");
     
-        let google_password = env::var("GOOGLE_PASSWORD")
+        let google_password = std::env::var("GOOGLE_PASSWORD")
         .expect("Password must be set");
 
         let recipient_name=email_extraction.split("@").collect::<Vec<&str>>();
-         
         let sender_name = &google_username.split("@").collect::<Vec<&str>>();
-        
-        
-
         let recipient_string = format!("{} <{}>", recipient_name[0], email_extraction);
         let sender_string = format!("{} <{}>", sender_name[0], google_username);
 
-
-     let email_message = Message::builder()
+     let email_message = lettre::Message::builder()
      .from(sender_string.parse().unwrap())
      .to(recipient_string.parse().unwrap())
      .subject("Microbit Alert")
      .body(String::from("Your microbit has detected a high level of movement."))
      .unwrap();
 
-
-
-
-     let creds = Credentials::new(google_username, google_password);
-     let mailer = SmtpTransport::relay("smtp.gmail.com")
+     let creds = lettre::transport::smtp::authentication::Credentials::new(google_username, google_password);
+     let mailer = lettre::SmtpTransport::relay("smtp.gmail.com")
     .unwrap()
     .credentials(creds)
     .build();
 
-
-
-match mailer.send(&email_message) {
+match lettre::Transport::send(&mailer, &email_message) {
     Ok(_) => println!("Email sent successfully!"),
     Err(e) => panic!("Could not send email: {:?}", e),
 }
 
- HttpResponse::Ok().body("Email sent")
+
+
+ actix_web::HttpResponse::Ok().body("Email sent")
 
 }
 
 
-#[post("/updateschedule")]
+#[actix_web::post("/updateschedule")]
 
-async fn update_schedule(req: web::Json<EmailPayload>) -> impl Responder {
+async fn update_schedule(req: actix_web::web::Json<EmailPayload>) -> impl actix_web::Responder {
    
     let connection = establish_connection();
 
@@ -200,7 +170,7 @@ async fn update_schedule(req: web::Json<EmailPayload>) -> impl Responder {
 
     if active_time == "Microbit does not exist" {
             
-            return HttpResponse::Ok().body(active_time);
+            return actix_web::HttpResponse::Ok().body(active_time);
     }
    
    let times = active_time.split("::").collect::<Vec<&str>>();
@@ -215,21 +185,21 @@ async fn update_schedule(req: web::Json<EmailPayload>) -> impl Responder {
 
 
 
- HttpResponse::Ok().json(response)
+ actix_web::HttpResponse::Ok().json(response)
 
 }
 
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    dotenv().ok();
+    dotenv::dotenv().ok();
 
-    let g = env::var("DATABASE_URL").expect("DATA_SOURCE_URL must be set");
+    let g = std::env::var("DATABASE_URL").expect("DATA_SOURCE_URL must be set");
     
 println!("{}", g);
 
-    HttpServer::new(|| {
-        App::new()
+    actix_web::HttpServer::new(|| {
+        actix_web::App::new()
             .service(register)
             .service(login)
             .service(post_email)
